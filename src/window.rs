@@ -10,6 +10,8 @@ mod movable;
 mod pane_drag;
 mod pane_size;
 mod titlebar;
+#[cfg(target_os = "macos")]
+mod input_source;
 
 use crate::layout::{Axis, Background as Paint, Content, Fit, HeaderContent, Kind, Line, Node, PaneFrame, Size as Span};
 use crate::model::{self, Tab, Model};
@@ -263,6 +265,8 @@ struct Term {
     address: String,
     focus: FocusHandle,
     _sub: Subscription,
+    #[cfg(target_os = "macos")]
+    _input_source: [Subscription; 2],
 }
 
 enum TerminalChange {
@@ -454,6 +458,8 @@ pub struct AppWindow {
     _tasks: Vec<Task<()>>,
     /// Gives the keyboard back when what had it leaves the screen (`restore_focus`).
     _focus_lost: Option<Subscription>,
+    #[cfg(target_os = "macos")]
+    input_sources: input_source::InputSources,
     /// Remembers where the window is (`place.rs`); the write waiting to settle.
     _place: Option<Subscription>,
     place_write: Option<Task<()>>,
@@ -540,10 +546,14 @@ impl AppWindow {
             focus: cx.focus_handle(),
             _tasks: Vec::new(),
             _focus_lost: None,
+            #[cfg(target_os = "macos")]
+            input_sources: Default::default(),
             _place: None,
             place_write: None,
         };
         w._focus_lost = Some(cx.on_focus_lost(window, |this, window, cx| this.restore_focus(window, cx)));
+        #[cfg(target_os = "macos")]
+        w.watch_input_sources(window, cx);
         w._place = Some(cx.observe_window_bounds(window, |this, window, cx| {
             if let Some(t) = crate::place::changed(window, cx) {
                 this.place_write = Some(t);
@@ -1417,7 +1427,12 @@ impl AppWindow {
                 }
             });
             let focus = view.read(cx).focus_handle().clone();
-            self.terms.insert(id, Term { view, address, focus, _sub: sub });
+            #[cfg(target_os = "macos")]
+            let input_source = self.watch_pane_input_source(&focus, window, cx);
+            self.terms.insert(id, Term { view, address, focus, _sub: sub,
+                #[cfg(target_os = "macos")]
+                _input_source: input_source,
+            });
         }
         let gone: Vec<String> = self.terms.keys().filter(|id| !want_terms.contains(*id)).cloned().collect();
         for id in gone {
@@ -1506,6 +1521,9 @@ impl AppWindow {
         self.share_seen(cx);
         self.publish(cx);
         self.save();
+        // Removing a focused terminal also drops its focus-out subscription.
+        #[cfg(target_os = "macos")]
+        self.sync_input_source(window, cx);
         cx.notify();
     }
 

@@ -136,6 +136,8 @@ the highlighted line shows where it will land.
   with the same address; its original command is never run again. Splits
   and mod panes stay. An exited or killed terminal is closed, not restarted.
   Focus, zoom, recent spaces, settled tabs and seen attention stay on this screen.
+  On macOS, terminal panes automatically remember their input source until Herdr
+  quits. New panes inherit the current source; returning restores their last source.
 - Every terminal is a core terminal. Herdr labels the ones it starts with
   `herdr.space=<id>` and `herdr.tab=<id>`. **A terminal with those
   labels shows up there**, even one you start yourself:
